@@ -185,14 +185,11 @@ mod tests {
         let resp_integer: RespFrame = RespInteger::new(1).into();
         let result = resp_integer.encode()?;
         assert_eq!(result, b":1\r\n");
-        Ok(())
-    }
 
-    #[test]
-    fn test_negnegtive_integer_encode() -> Result<()> {
         let resp_integer: RespFrame = RespInteger::new(-1).into();
         let result = resp_integer.encode()?;
         assert_eq!(result, b":-1\r\n");
+
         Ok(())
     }
 
@@ -245,30 +242,64 @@ mod tests {
         let resp_bool: RespFrame = true.into();
         let result = resp_bool.encode()?;
         assert_eq!(result, b"#t\r\n");
-        Ok(())
-    }
 
-    #[test]
-    fn test_bool_false_encode() -> Result<()> {
         let resp_bool: RespFrame = false.into();
         let result = resp_bool.encode()?;
         assert_eq!(result, b"#f\r\n");
+
         Ok(())
     }
 
     #[test]
     fn test_double_encode() -> Result<()> {
-        let resp_double: RespFrame = 1.0.into();
+        let resp_double: RespFrame = 123.4567.into();
         let result = resp_double.encode()?;
-        assert_eq!(result, b",+1e0\r\n");
+        assert_eq!(result, b",+1.234567e2\r\n");
+
+        let resp_double: RespFrame = (-1.0).into();
+        let result = resp_double.encode()?;
+        assert_eq!(result, b",-1e0\r\n");
+
+        let resp_double: RespFrame = 1.23456e+8.into();
+        let result = resp_double.encode()?;
+        assert_eq!(result, b",+1.23456e8\r\n");
+
+        let resp_double: RespFrame = (-1.23456e-8).into();
+        let result = resp_double.encode()?;
+        assert_eq!(result, b",-1.23456e-8\r\n");
+
         Ok(())
     }
 
     #[test]
-    fn test_double_negative_encode() -> Result<()> {
-        let resp_double: RespFrame = (-1.0).into();
-        let result = resp_double.encode()?;
-        assert_eq!(result, b",-1e0\r\n");
+    fn test_map_encode() -> Result<()> {
+        let mut map = RespMap::new();
+        map.insert(
+            RespSimpleString::new("hello"),
+            RespBulkString::new("world").into(),
+        );
+        map.insert(RespSimpleString::new("foo"), (-1.23456e-8).into());
+
+        let frame: RespFrame = map.into();
+        assert_eq!(
+            frame.encode()?,
+            b"%2\r\n+foo\r\n,-1.23456e-8\r\n+hello\r\n$5\r\nworld\r\n".to_vec()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_set_encode() -> Result<()> {
+        let frame_vec = vec![RespSimpleString::new("hello").into(), (-1.23456e-8).into()];
+        let set = RespSet::new(frame_vec);
+
+        let frame: RespFrame = set.into();
+        assert_eq!(
+            frame.encode()?,
+            b"~2\r\n+hello\r\n,-1.23456e-8\r\n".to_vec()
+        );
+
         Ok(())
     }
 }
