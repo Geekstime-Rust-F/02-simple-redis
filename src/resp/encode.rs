@@ -1,8 +1,8 @@
 use anyhow::Result;
 
 use super::{
-    RespArray, RespBulkError, RespBulkString, RespEncode, RespError, RespInteger, RespMap,
-    RespNull, RespNullArray, RespNullBulkString, RespSet, RespSimpleString,
+    RespArray, RespBulkError, RespBulkString, RespEncode, RespInteger, RespMap, RespNull,
+    RespNullArray, RespNullBulkString, RespSet, RespSimpleError, RespSimpleString,
 };
 
 // implementation of Redis serialization protocol
@@ -34,7 +34,7 @@ impl RespEncode for RespSimpleString {
 }
 
 // - error: "-Error message\r\n"
-impl RespEncode for RespError {
+impl RespEncode for RespSimpleError {
     fn encode(self) -> Result<Vec<u8>> {
         Ok(format!("-{}\r\n", *self).into())
     }
@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn test_error_encode() -> Result<()> {
-        let resp_error: RespFrame = RespError::new("Error").into();
+        let resp_error: RespFrame = RespSimpleError::new("Error").into();
         let result = resp_error.encode()?;
         assert_eq!(result, b"-Error\r\n");
         Ok(())
