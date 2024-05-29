@@ -6,6 +6,7 @@ use bytes::BytesMut;
 use enum_dispatch::enum_dispatch;
 use std::{
     collections::BTreeMap,
+    num::{ParseFloatError, ParseIntError},
     ops::{Deref, DerefMut},
 };
 use thiserror::Error;
@@ -43,7 +44,10 @@ pub enum RespDecodeError {
     NotComplete,
 
     #[error("Frame parse int error")]
-    ParseIntError,
+    ParseIntError(#[from] ParseIntError),
+    // ParseIntError,
+    #[error("Frame parse float error")]
+    ParseFloatError(#[from] ParseFloatError),
 }
 
 #[enum_dispatch]
@@ -135,10 +139,16 @@ impl RespFrameFirstByte for RespInteger {
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd)]
-pub struct RespBulkString(Vec<u8>);
+pub struct RespBulkString(pub Vec<u8>);
 impl RespBulkString {
     pub fn new(string: impl Into<Vec<u8>>) -> Self {
         Self(string.into())
+    }
+}
+impl Deref for RespBulkString {
+    type Target = Vec<u8>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 impl RespFrameFirstByte for RespBulkString {
@@ -156,7 +166,7 @@ impl RespFrameFirstByte for f64 {
 }
 
 #[derive(Debug, PartialEq, PartialOrd)]
-pub struct RespArray(Vec<RespFrame>);
+pub struct RespArray(pub Vec<RespFrame>);
 impl RespArray {
     pub fn new(frame_vec: Vec<RespFrame>) -> Self {
         Self(frame_vec)
@@ -164,6 +174,13 @@ impl RespArray {
 }
 impl RespFrameFirstByte for RespArray {
     const FIRST_BYTE: [u8; 1] = [b'*'];
+}
+impl Deref for RespArray {
+    type Target = Vec<RespFrame>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd)]

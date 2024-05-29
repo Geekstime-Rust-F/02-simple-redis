@@ -103,7 +103,7 @@ fn extract_simple_frame_data(
 fn parse_length(buf: &mut BytesMut, prefix: &str) -> Result<(usize, usize), RespDecodeError> {
     let length_end_pos = extract_simple_frame_data(buf, [prefix.as_bytes()[0]])?;
     let length = String::from_utf8_lossy(&buf[prefix.len()..length_end_pos]);
-    Ok((length_end_pos, length.parse().unwrap()))
+    Ok((length_end_pos, length.parse()?))
 }
 
 // - simple string: "+OK\r\n"
@@ -156,7 +156,7 @@ impl RespDecode for RespInteger {
 
         let data = buf.split_to(end_content_pos + CRLF_LEN);
         let s = String::from_utf8_lossy(&data[1..end_content_pos]);
-        Ok(RespInteger::new(s.trim().parse().unwrap())) // TODO parse ParseIntError to RespDecodeError
+        Ok(RespInteger::new(s.trim().parse()?))
     }
 }
 
@@ -265,7 +265,7 @@ impl RespDecode for f64 {
         let end_content_pos = extract_simple_frame_data(buf, Self::FIRST_BYTE)?;
         let data = buf.split_to(end_content_pos + CRLF_LEN);
         let s = String::from_utf8_lossy(&data[1..end_content_pos]);
-        Ok(s.trim().parse().unwrap()) // TODO parse ParseIntError to RespDecodeError
+        Ok(s.trim().parse()?)
     }
 }
 
