@@ -1,14 +1,19 @@
 mod hmap;
 mod map;
 
+use lazy_static::lazy_static;
 use std::string::FromUtf8Error;
-
 use thiserror::Error;
 
-use crate::{RespArray, RespDecodeError, RespFrame};
+use crate::{backend::Backend, RespArray, RespDecodeError, RespFrame, RespSimpleString};
+
+lazy_static! {
+    static ref RESP_OK: RespFrame =
+        RespFrame::SimpleString(RespSimpleString::new("OK".to_string()));
+}
 
 pub trait CommandExecutor {
-    fn execute(self) -> RespFrame;
+    fn execute(self, backend: &Backend) -> RespFrame;
 }
 
 #[derive(Debug, Error)]

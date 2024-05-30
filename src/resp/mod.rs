@@ -12,7 +12,7 @@ use std::{
 use thiserror::Error;
 
 #[enum_dispatch(RespEncode)]
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum RespFrame {
     SimpleString(RespSimpleString),
     Error(RespSimpleError),
@@ -29,7 +29,7 @@ pub enum RespFrame {
     Set(RespSet),
 }
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum RespDecodeError {
     #[error("Invalid frame: {0}")]
     InvalidFrame(String),
@@ -63,7 +63,7 @@ pub trait RespDecode: Sized {
     fn decode(buf: &mut BytesMut) -> Result<Self, RespDecodeError>;
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct RespSimpleString(String);
 impl RespSimpleString {
     pub fn new(string: impl Into<String>) -> Self {
@@ -81,7 +81,7 @@ impl RespFrameFirstByte for RespSimpleString {
     const FIRST_BYTE: [u8; 1] = [b'+'];
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub struct RespSimpleError(String);
 impl RespSimpleError {
     pub fn new(string: impl Into<String>) -> Self {
@@ -104,7 +104,7 @@ impl RespFrameFirstByte for RespSimpleError {
 //     }
 // }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub struct RespBulkError(Vec<u8>);
 impl RespBulkError {
     pub fn new(string: impl Into<Vec<u8>>) -> Self {
@@ -121,7 +121,7 @@ impl RespFrameFirstByte for RespBulkError {
     const FIRST_BYTE: [u8; 1] = [b'!'];
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub struct RespInteger(i64);
 impl RespInteger {
     pub fn new(integer: i64) -> Self {
@@ -138,7 +138,7 @@ impl RespFrameFirstByte for RespInteger {
     const FIRST_BYTE: [u8; 1] = [b':'];
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub struct RespBulkString(pub Vec<u8>);
 impl RespBulkString {
     pub fn new(string: impl Into<Vec<u8>>) -> Self {
@@ -155,7 +155,7 @@ impl RespFrameFirstByte for RespBulkString {
     const FIRST_BYTE: [u8; 1] = [b'$'];
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub struct RespNullBulkString;
 impl RespFrameFirstByte for RespNullBulkString {
     const FIRST_BYTE: [u8; 1] = [b'$'];
@@ -165,7 +165,7 @@ impl RespFrameFirstByte for f64 {
     const FIRST_BYTE: [u8; 1] = [b','];
 }
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct RespArray(pub Vec<RespFrame>);
 impl RespArray {
     pub fn new(frame_vec: Vec<RespFrame>) -> Self {
@@ -183,13 +183,13 @@ impl Deref for RespArray {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub struct RespNullArray;
 impl RespFrameFirstByte for RespNullArray {
     const FIRST_BYTE: [u8; 1] = [b'*'];
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub struct RespNull;
 impl RespFrameFirstByte for RespNull {
     const FIRST_BYTE: [u8; 1] = [b'_'];
@@ -199,7 +199,7 @@ impl RespFrameFirstByte for bool {
     const FIRST_BYTE: [u8; 1] = [b'#'];
 }
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct RespMap(BTreeMap<RespSimpleString, RespFrame>);
 impl RespMap {
     pub fn new() -> Self {
@@ -227,7 +227,7 @@ impl RespFrameFirstByte for RespMap {
     const FIRST_BYTE: [u8; 1] = [b'%'];
 }
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct RespSet(Vec<RespFrame>);
 impl RespSet {
     pub fn new(frame_vec: impl Into<Vec<RespFrame>>) -> Self {
