@@ -1,22 +1,23 @@
-use crate::{backend::Backend, RespArray, RespFrame, RespNull, RespSimpleString};
+use crate::{backend::Backend, RespArray, RespFrame, RespNull};
 
-use super::{extract_args, validate_command, CommandError, CommandExecutor, CommandGet, CommandSet, RESP_OK};
+use super::{
+    extract_args, validate_command, CommandError, CommandExecutor, CommandGet, CommandSet, RESP_OK,
+};
 
 impl CommandExecutor for CommandGet {
-   fn execute(self, backend: &Backend) -> RespFrame {
-       match backend.get(&self.key) {
-        Some(value) => value,
-        None => RespFrame::Null(RespNull),
-    
+    fn execute(self, backend: &Backend) -> RespFrame {
+        match backend.get(&self.key) {
+            Some(value) => value,
+            None => RespFrame::Null(RespNull),
+        }
     }
-  }
 }
 
 impl CommandExecutor for CommandSet {
-  fn execute(self, backend: &Backend) -> RespFrame {
-      backend.set(&self.key, self.value);
-      RESP_OK.clone()
-  }
+    fn execute(self, backend: &Backend) -> RespFrame {
+        backend.set(&self.key, self.value);
+        RESP_OK.clone()
+    }
 }
 
 impl TryFrom<RespArray> for CommandGet {
@@ -61,7 +62,9 @@ mod tests {
     use bytes::BytesMut;
 
     use crate::{
-        backend::Backend, cmd::{CommandExecutor, CommandGet, CommandSet, RESP_OK}, RespArray, RespBulkString, RespDecode, RespFrame
+        backend::Backend,
+        cmd::{CommandExecutor, CommandGet, CommandSet, RESP_OK},
+        RespArray, RespBulkString, RespDecode, RespFrame,
     };
 
     #[test]
@@ -92,21 +95,24 @@ mod tests {
 
     #[test]
     fn test_set_get_command() -> Result<()> {
-      let backend = Backend::new();
-      let set_command: CommandSet = CommandSet {
-        key: "hello".to_string(),
-        value: RespFrame::BulkString(RespBulkString::new(b"world".to_vec())),
-      };
+        let backend = Backend::new();
+        let set_command: CommandSet = CommandSet {
+            key: "hello".to_string(),
+            value: RespFrame::BulkString(RespBulkString::new(b"world".to_vec())),
+        };
 
-      let result = set_command.execute(&backend);
-      assert_eq!(result, RESP_OK.clone());
-      
-      let get_command: CommandGet = CommandGet {
-        key: "hello".to_string(),
-      };
-      let result = get_command.execute(&backend);
-      assert_eq!(result, RespFrame::BulkString(RespBulkString::new(b"world".to_vec())));
+        let result = set_command.execute(&backend);
+        assert_eq!(result, RESP_OK.clone());
 
-      Ok(())
+        let get_command: CommandGet = CommandGet {
+            key: "hello".to_string(),
+        };
+        let result = get_command.execute(&backend);
+        assert_eq!(
+            result,
+            RespFrame::BulkString(RespBulkString::new(b"world".to_vec()))
+        );
+
+        Ok(())
     }
 }

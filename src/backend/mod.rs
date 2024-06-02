@@ -4,7 +4,7 @@ use dashmap::DashMap;
 
 use crate::RespFrame;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Backend(Arc<BackendInner>);
 
 impl Backend {
@@ -63,10 +63,11 @@ impl Backend {
     }
 
     pub fn hset(&self, key: &str, field: &str, value: RespFrame) {
-        let hmap = self
-            .hmap
-            .entry(key.to_string())
-            .or_default();
+        let hmap: dashmap::mapref::one::RefMut<
+            String,
+            DashMap<String, RespFrame>,
+            std::hash::RandomState,
+        > = self.hmap.entry(key.to_string()).or_default();
         hmap.insert(field.to_string(), value);
     }
 

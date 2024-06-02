@@ -1,17 +1,23 @@
 mod hmap;
 mod map;
 
+use enum_dispatch::enum_dispatch;
 use lazy_static::lazy_static;
-use std::string::FromUtf8Error;
+use std::{ops::Deref, string::FromUtf8Error};
 use thiserror::Error;
 
-use crate::{backend::Backend, RespArray, RespDecodeError, RespFrame, RespSimpleString};
+use crate::{
+    backend::Backend, RespArray, RespDecodeError, RespFrame, RespSimpleError, RespSimpleString,
+};
 
 lazy_static! {
     static ref RESP_OK: RespFrame =
         RespFrame::SimpleString(RespSimpleString::new("OK".to_string()));
+    static ref RESP_UNKNOWNN_COMMAND: RespFrame =
+        RespFrame::Error(RespSimpleError::new("Unknown command".to_string()));
 }
 
+#[enum_dispatch]
 pub trait CommandExecutor {
     fn execute(self, backend: &Backend) -> RespFrame;
 }
@@ -31,14 +37,55 @@ pub enum CommandError {
     FromUtf8Error(#[from] FromUtf8Error),
 }
 
+#[derive(Debug, PartialEq)]
+#[enum_dispatch(CommandExecutor)]
 pub enum Command {
     Get(CommandGet),
     Set(CommandSet),
     HGet(CommandHGet),
-    HSet(CommandHGetAll),
+    HSet(CommandHSet),
+    HGetAll(CommandHGetAll),
+
+    // unknown commands
+    UnknownCommand(CommandUnknown),
 }
 
-#[derive(Debug)]
+impl TryFrom<RespArray> for Command {
+    type Error = CommandError;
+    fn try_from(value: RespArray) -> Result<Self, Self::Error> {
+        match value.first() {
+            Some(RespFrame::BulkString(ref command)) => {
+                let command_str = String::from_utf8_lossy(command.deref()).into_owned();
+                let command_str = command_str.as_str();
+                match command_str {
+                    "get" => match CommandGet::try_from(value) {
+                        Ok(command) => Ok(command.into()),
+                        Err(err) => Err(err),
+                    },
+                    "set" => match CommandSet::try_from(value) {
+                        Ok(command) => Ok(command.into()),
+                        Err(err) => Err(err),
+                    },
+                    "hget" => match CommandHGet::try_from(value) {
+                        Ok(command) => Ok(command.into()),
+                        Err(err) => Err(err),
+                    },
+                    "hset" => match CommandHSet::try_from(value) {
+                        Ok(command) => Ok(command.into()),
+                        Err(err) => Err(err),
+                    },
+                    "hgetall" => match CommandHGetAll::try_from(value) {
+                        Ok(command) => Ok(command.into()),
+                        Err(err) => Err(err),
+                    },
+                    _ => Ok(CommandUnknown.into()),
+                }
+            }
+            _ => todo!(),
+        }
+    }
+}
+#[derive(Debug, PartialEq)]
 pub struct CommandGet {
     key: String,
 }
@@ -48,34 +95,36 @@ impl CommandGet {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CommandSet {
     key: String,
     value: RespFrame,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CommandHGet {
     key: String,
     field: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CommandHSet {
     key: String,
     field: String,
     value: RespFrame,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CommandHGetAll {
     field: String,
 }
 
-impl TryFrom<RespArray> for Command {
-    type Error = CommandError;
-    fn try_from(_value: RespArray) -> Result<Self, Self::Error> {
-        todo!()
+#[derive(Debug, PartialEq)]
+pub struct CommandUnknown;
+
+impl CommandExecutor for CommandUnknown {
+    fn execute(self, _backend: &Backend) -> RespFrame {
+        RESP_UNKNOWNN_COMMAND.to_owned()
     }
 }
 
@@ -145,6 +194,22 @@ mod tests {
 
         let args = extract_args(resp_array, 1)?;
         assert_eq!(args.len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_command_try_from() -> Result<()> {
+        let resp_array = RespArray::new(vec![
+            RespFrame::BulkString(RespBulkString::new(b"get".to_vec())),
+            RespFrame::BulkString(RespBulkString::new(b"key".to_vec())),
+        ]);
+
+        let command: super::Command = resp_array.try_into()?;
+        assert_eq!(
+            command,
+            super::Command::Get(super::CommandGet::new("key".to_string()))
+        );
 
         Ok(())
     }

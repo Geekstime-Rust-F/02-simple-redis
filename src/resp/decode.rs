@@ -20,6 +20,7 @@
 use crate::{RespFrameFirstByte, RespMap, RespNull, RespNullArray, RespNullBulkString, RespSet};
 use anyhow::Result;
 use bytes::{Buf, BytesMut};
+use tracing::info;
 
 use crate::{
     RespArray, RespBulkError, RespBulkString, RespDecode, RespDecodeError, RespFrame, RespInteger,
@@ -87,10 +88,11 @@ fn extract_simple_frame_data(
     buf: &mut BytesMut,
     prefix: [u8; 1],
 ) -> Result<usize, RespDecodeError> {
+    info!("buf in extract_simple_frame_data: {:?}", buf);
     if !buf.starts_with(&prefix) {
         return Err(RespDecodeError::InvalidFrameType(format!(
             "This RespFrame requires to start with {:?}",
-            prefix
+            String::from_utf8_lossy(prefix.as_ref())
         )));
     }
 

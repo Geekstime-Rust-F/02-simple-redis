@@ -1,7 +1,8 @@
-use crate::{RespArray, RespFrame};
+use crate::{RespArray, RespFrame, RespNull};
 
 use super::{
-    extract_args, validate_command, CommandError, CommandHGet, CommandHGetAll, CommandHSet,
+    extract_args, validate_command, CommandError, CommandExecutor, CommandHGet, CommandHGetAll,
+    CommandHSet, RESP_OK,
 };
 
 impl TryFrom<RespArray> for CommandHGet {
@@ -20,6 +21,15 @@ impl TryFrom<RespArray> for CommandHGet {
             _ => Err(CommandError::InvalidCommandArguments(
                 "Invalid key or field".to_string(),
             )),
+        }
+    }
+}
+
+impl CommandExecutor for CommandHGet {
+    fn execute(self, backend: &crate::backend::Backend) -> RespFrame {
+        match backend.hsget(&self.key, &self.field) {
+            Some(value) => value,
+            None => RespFrame::Null(RespNull),
         }
     }
 }
@@ -46,6 +56,12 @@ impl TryFrom<RespArray> for CommandHSet {
         }
     }
 }
+impl CommandExecutor for CommandHSet {
+    fn execute(self, backend: &crate::backend::Backend) -> RespFrame {
+        backend.hset(&self.key, &self.field, self.value);
+        RESP_OK.to_owned()
+    }
+}
 
 impl TryFrom<RespArray> for CommandHGetAll {
     type Error = CommandError;
@@ -61,6 +77,13 @@ impl TryFrom<RespArray> for CommandHGetAll {
                 "Invalid key or field".to_string(),
             )),
         }
+    }
+}
+
+impl CommandExecutor for CommandHGetAll {
+    fn execute(self, _backend: &crate::backend::Backend) -> RespFrame {
+        // backend.hgetall(&self.field).into()
+        todo!()
     }
 }
 
