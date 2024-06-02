@@ -4,10 +4,11 @@ use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
 use tracing::info;
 
+use crate::resp::RespEncode;
 use crate::{
     backend::Backend,
     cmd::{Command, CommandExecutor},
-    RespArray, RespDecode, RespEncode, RespFrame,
+    RespArray, RespDecode, RespFrame,
 };
 use tokio_util::codec::{Decoder, Encoder, Framed};
 

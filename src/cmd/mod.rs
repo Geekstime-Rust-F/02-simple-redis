@@ -3,7 +3,7 @@ mod map;
 
 use enum_dispatch::enum_dispatch;
 use lazy_static::lazy_static;
-use std::{ops::Deref, string::FromUtf8Error};
+use std::string::FromUtf8Error;
 use thiserror::Error;
 
 use crate::{
@@ -54,33 +54,14 @@ impl TryFrom<RespArray> for Command {
     type Error = CommandError;
     fn try_from(value: RespArray) -> Result<Self, Self::Error> {
         match value.first() {
-            Some(RespFrame::BulkString(ref command)) => {
-                let command_str = String::from_utf8_lossy(command.deref()).into_owned();
-                let command_str = command_str.as_str();
-                match command_str {
-                    "get" => match CommandGet::try_from(value) {
-                        Ok(command) => Ok(command.into()),
-                        Err(err) => Err(err),
-                    },
-                    "set" => match CommandSet::try_from(value) {
-                        Ok(command) => Ok(command.into()),
-                        Err(err) => Err(err),
-                    },
-                    "hget" => match CommandHGet::try_from(value) {
-                        Ok(command) => Ok(command.into()),
-                        Err(err) => Err(err),
-                    },
-                    "hset" => match CommandHSet::try_from(value) {
-                        Ok(command) => Ok(command.into()),
-                        Err(err) => Err(err),
-                    },
-                    "hgetall" => match CommandHGetAll::try_from(value) {
-                        Ok(command) => Ok(command.into()),
-                        Err(err) => Err(err),
-                    },
-                    _ => Ok(CommandUnknown.into()),
-                }
-            }
+            Some(RespFrame::BulkString(ref command)) => match command.as_ref() {
+                b"get" => Ok(CommandGet::try_from(value)?.into()),
+                b"set" => Ok(CommandSet::try_from(value)?.into()),
+                b"hget" => Ok(CommandHGet::try_from(value)?.into()),
+                b"hset" => Ok(CommandHSet::try_from(value)?.into()),
+                b"hgetall" => Ok(CommandHGetAll::try_from(value)?.into()),
+                _ => Ok(CommandUnknown.into()),
+            },
             _ => todo!(),
         }
     }

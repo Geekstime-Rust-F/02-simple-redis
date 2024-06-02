@@ -1,33 +1,35 @@
+mod array;
+mod bool;
+mod bulk_error;
+mod bulk_string;
 mod decode;
-mod encode;
+mod f64;
+mod frame;
+mod integer;
+mod map;
+mod null;
+mod set;
+mod simple_error;
+mod simple_string;
+
+pub use self::{
+    array::{RespArray, RespNullArray},
+    bulk_error::RespBulkError,
+    bulk_string::{RespBulkString, RespNullBulkString},
+    decode::{extract_simple_frame_data, parse_length, RespDecode, CRLF, CRLF_LEN},
+    frame::RespFrame,
+    integer::RespInteger,
+    map::RespMap,
+    null::RespNull,
+    set::RespSet,
+    simple_error::RespSimpleError,
+    simple_string::RespSimpleString,
+};
 
 use anyhow::Result;
-use bytes::BytesMut;
 use enum_dispatch::enum_dispatch;
-use std::{
-    collections::BTreeMap,
-    num::{ParseFloatError, ParseIntError},
-    ops::{Deref, DerefMut},
-};
+use std::num::{ParseFloatError, ParseIntError};
 use thiserror::Error;
-
-#[enum_dispatch(RespEncode)]
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum RespFrame {
-    SimpleString(RespSimpleString),
-    Error(RespSimpleError),
-    BulkError(RespBulkError),
-    Integer(RespInteger),
-    BulkString(RespBulkString),
-    NullBulkString(RespNullBulkString),
-    Array(RespArray),
-    NullArray(RespNullArray),
-    Null(RespNull),
-    Boolean(bool),
-    Double(f64),
-    Map(RespMap),
-    Set(RespSet),
-}
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum RespDecodeError {
@@ -50,190 +52,28 @@ pub enum RespDecodeError {
     ParseFloatError(#[from] ParseFloatError),
 }
 
+pub const BUF_CAP: usize = 1024;
+
 #[enum_dispatch]
 pub trait RespEncode {
     fn encode(self) -> Result<Vec<u8>>;
 }
 
-pub trait RespFrameFirstByte {
-    const FIRST_BYTE: [u8; 1];
-}
-
-pub trait RespDecode: Sized {
-    fn decode(buf: &mut BytesMut) -> Result<Self, RespDecodeError>;
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct RespSimpleString(String);
-impl RespSimpleString {
-    pub fn new(string: impl Into<String>) -> Self {
-        Self(string.into())
-    }
-}
-impl Deref for RespSimpleString {
-    type Target = String;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl RespFrameFirstByte for RespSimpleString {
-    const FIRST_BYTE: [u8; 1] = [b'+'];
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
-pub struct RespSimpleError(String);
-impl RespSimpleError {
-    pub fn new(string: impl Into<String>) -> Self {
-        Self(string.into())
-    }
-}
-impl Deref for RespSimpleError {
-    type Target = String;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl RespFrameFirstByte for RespSimpleError {
-    const FIRST_BYTE: [u8; 1] = [b'-'];
-}
-// impl From<RespSimpleString> for RespFrame {
-//     fn from(value: RespSimpleString) -> Self {
-//         RespFrame::SimpleString(value)
-//     }
-// }
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
-pub struct RespBulkError(Vec<u8>);
-impl RespBulkError {
-    pub fn new(string: impl Into<Vec<u8>>) -> Self {
-        Self(string.into())
-    }
-}
-impl Deref for RespBulkError {
-    type Target = Vec<u8>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl RespFrameFirstByte for RespBulkError {
-    const FIRST_BYTE: [u8; 1] = [b'!'];
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
-pub struct RespInteger(i64);
-impl RespInteger {
-    pub fn new(integer: i64) -> Self {
-        Self(integer)
-    }
-}
-impl Deref for RespInteger {
-    type Target = i64;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl RespFrameFirstByte for RespInteger {
-    const FIRST_BYTE: [u8; 1] = [b':'];
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
-pub struct RespBulkString(pub Vec<u8>);
-impl RespBulkString {
-    pub fn new(string: impl Into<Vec<u8>>) -> Self {
-        Self(string.into())
-    }
-}
-impl Deref for RespBulkString {
-    type Target = Vec<u8>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl RespFrameFirstByte for RespBulkString {
-    const FIRST_BYTE: [u8; 1] = [b'$'];
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
-pub struct RespNullBulkString;
-impl RespFrameFirstByte for RespNullBulkString {
-    const FIRST_BYTE: [u8; 1] = [b'$'];
-}
-
-impl RespFrameFirstByte for f64 {
-    const FIRST_BYTE: [u8; 1] = [b','];
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct RespArray(pub Vec<RespFrame>);
-impl RespArray {
-    pub fn new(frame_vec: Vec<RespFrame>) -> Self {
-        Self(frame_vec)
-    }
-}
-impl RespFrameFirstByte for RespArray {
-    const FIRST_BYTE: [u8; 1] = [b'*'];
-}
-impl Deref for RespArray {
-    type Target = Vec<RespFrame>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
-pub struct RespNullArray;
-impl RespFrameFirstByte for RespNullArray {
-    const FIRST_BYTE: [u8; 1] = [b'*'];
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
-pub struct RespNull;
-impl RespFrameFirstByte for RespNull {
-    const FIRST_BYTE: [u8; 1] = [b'_'];
-}
-
-impl RespFrameFirstByte for bool {
-    const FIRST_BYTE: [u8; 1] = [b'#'];
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct RespMap(BTreeMap<RespSimpleString, RespFrame>);
-impl RespMap {
-    pub fn new() -> Self {
-        Self(BTreeMap::new())
-    }
-}
-impl Default for RespMap {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-impl Deref for RespMap {
-    type Target = BTreeMap<RespSimpleString, RespFrame>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl DerefMut for RespMap {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-impl RespFrameFirstByte for RespMap {
-    const FIRST_BYTE: [u8; 1] = [b'%'];
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct RespSet(Vec<RespFrame>);
-impl RespSet {
-    pub fn new(frame_vec: impl Into<Vec<RespFrame>>) -> Self {
-        Self(frame_vec.into())
-    }
-}
-impl RespFrameFirstByte for RespSet {
-    const FIRST_BYTE: [u8; 1] = [b'~'];
-}
+// implementation of Redis serialization protocol
+/*
+    - simple string: "+OK\r\n"
+    - error: "-Error message\r\n"
+    - bulk error: "!<length>\r\n<error>\r\n"
+    - integer: ":[<+|->]<value>\r\n"
+    - bulk string: "$<length>\r\n<data>\r\n"
+    - null bulk string: "$-1\r\n"
+    - array: "*<number-of-elements>\r\n<element-1>...<element-n>"
+        - "*2\r\n$3\r\nget\r\n$5\r\nhello\r\n"
+    - null array: "*-1\r\n"
+    - null: "_\r\n"
+    - boolean: "#<t|f>\r\n"
+    - double: ",[<+|->]<integral>[.<fractional>][<E|e>[sign]<exponent>]\r\n"
+    - big number: "([+|-]<number>\r\n"
+    - map: "%<number-of-entries>\r\n<key-1><value-1>...<key-n><value-n>"
+    - set: "~<number-of-elements>\r\n<element-1>...<element-n>"
+*/
