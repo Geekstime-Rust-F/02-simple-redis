@@ -1,8 +1,22 @@
 use crate::{backend::Backend, RespArray, RespFrame, RespNull};
 
-use super::{
-    extract_args, validate_command, CommandError, CommandExecutor, CommandGet, CommandSet, RESP_OK,
-};
+use super::{extract_args, validate_command, CommandError, CommandExecutor, RESP_OK};
+
+#[derive(Debug, PartialEq)]
+pub struct CommandGet {
+    key: String,
+}
+impl CommandGet {
+    pub fn new(key: String) -> Self {
+        Self { key }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CommandSet {
+    key: String,
+    value: RespFrame,
+}
 
 impl CommandExecutor for CommandGet {
     fn execute(self, backend: &Backend) -> RespFrame {
@@ -63,7 +77,10 @@ mod tests {
 
     use crate::{
         backend::Backend,
-        cmd::{CommandExecutor, CommandGet, CommandSet, RESP_OK},
+        cmd::{
+            map::{CommandGet, CommandSet},
+            CommandExecutor, RESP_OK,
+        },
         RespArray, RespBulkString, RespDecode, RespFrame,
     };
 

@@ -1,10 +1,16 @@
+mod echo;
 mod hmap;
 mod map;
+mod unknow;
 
+use echo::CommandEcho;
 use enum_dispatch::enum_dispatch;
+use hmap::{CommandHGet, CommandHGetAll, CommandHSet};
 use lazy_static::lazy_static;
+use map::{CommandGet, CommandSet};
 use std::string::FromUtf8Error;
 use thiserror::Error;
+use unknow::CommandUnknown;
 
 use crate::{
     backend::Backend, RespArray, RespDecodeError, RespFrame, RespSimpleError, RespSimpleString,
@@ -46,6 +52,8 @@ pub enum Command {
     HSet(CommandHSet),
     HGetAll(CommandHGetAll),
 
+    Echo(CommandEcho),
+
     // unknown commands
     UnknownCommand(CommandUnknown),
 }
@@ -60,53 +68,11 @@ impl TryFrom<RespArray> for Command {
                 b"hget" => Ok(CommandHGet::try_from(value)?.into()),
                 b"hset" => Ok(CommandHSet::try_from(value)?.into()),
                 b"hgetall" => Ok(CommandHGetAll::try_from(value)?.into()),
+                b"echo" => Ok(CommandEcho::try_from(value)?.into()),
                 _ => Ok(CommandUnknown.into()),
             },
             _ => todo!(),
         }
-    }
-}
-#[derive(Debug, PartialEq)]
-pub struct CommandGet {
-    key: String,
-}
-impl CommandGet {
-    fn new(key: String) -> Self {
-        Self { key }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct CommandSet {
-    key: String,
-    value: RespFrame,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct CommandHGet {
-    key: String,
-    field: String,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct CommandHSet {
-    key: String,
-    field: String,
-    value: RespFrame,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct CommandHGetAll {
-    key: String,
-    sort: bool,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct CommandUnknown;
-
-impl CommandExecutor for CommandUnknown {
-    fn execute(self, _backend: &Backend) -> RespFrame {
-        RESP_UNKNOWNN_COMMAND.to_owned()
     }
 }
 
@@ -152,7 +118,10 @@ pub fn extract_args(
 
 #[cfg(test)]
 mod tests {
-    use crate::{cmd::validate_command, RespArray, RespBulkString, RespFrame};
+    use crate::{
+        cmd::{map::CommandGet, validate_command},
+        RespArray, RespBulkString, RespFrame,
+    };
     use anyhow::Result;
 
     use super::extract_args;
@@ -190,7 +159,7 @@ mod tests {
         let command: super::Command = resp_array.try_into()?;
         assert_eq!(
             command,
-            super::Command::Get(super::CommandGet::new("key".to_string()))
+            super::Command::Get(CommandGet::new("key".to_string()))
         );
 
         Ok(())

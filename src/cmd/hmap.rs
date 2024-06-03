@@ -1,9 +1,25 @@
 use crate::{RespArray, RespBulkString, RespFrame, RespNull};
 
-use super::{
-    extract_args, validate_command, CommandError, CommandExecutor, CommandHGet, CommandHGetAll,
-    CommandHSet, RESP_OK,
-};
+use super::{extract_args, validate_command, CommandError, CommandExecutor, RESP_OK};
+
+#[derive(Debug, PartialEq)]
+pub struct CommandHGet {
+    key: String,
+    field: String,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CommandHSet {
+    key: String,
+    field: String,
+    value: RespFrame,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CommandHGetAll {
+    key: String,
+    sort: bool,
+}
 
 impl TryFrom<RespArray> for CommandHGet {
     type Error = CommandError;
@@ -110,7 +126,10 @@ impl CommandExecutor for CommandHGetAll {
 #[cfg(test)]
 mod tests {
     use crate::{
-        cmd::{CommandExecutor, CommandHGet, CommandHGetAll, CommandHSet},
+        cmd::{
+            hmap::{CommandHGet, CommandHGetAll, CommandHSet},
+            CommandExecutor,
+        },
         RespArray, RespBulkString, RespFrame,
     };
     use anyhow::Result;
