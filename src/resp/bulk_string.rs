@@ -25,6 +25,12 @@ impl AsRef<[u8]> for RespBulkString {
         &self.0
     }
 }
+
+impl From<String> for RespBulkString {
+    fn from(value: String) -> Self {
+        RespBulkString(value.into_bytes())
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub struct RespNullBulkString;
 

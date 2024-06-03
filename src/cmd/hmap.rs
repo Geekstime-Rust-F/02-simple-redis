@@ -1,4 +1,4 @@
-use crate::{RespArray, RespFrame, RespNull};
+use crate::{RespArray, RespBulkString, RespFrame, RespNull};
 
 use super::{
     extract_args, validate_command, CommandError, CommandExecutor, CommandHGet, CommandHGetAll,
@@ -27,7 +27,7 @@ impl TryFrom<RespArray> for CommandHGet {
 
 impl CommandExecutor for CommandHGet {
     fn execute(self, backend: &crate::backend::Backend) -> RespFrame {
-        match backend.hsget(&self.key, &self.field) {
+        match backend.hget(&self.key, &self.field) {
             Some(value) => value,
             None => RespFrame::Null(RespNull),
         }
@@ -71,7 +71,8 @@ impl TryFrom<RespArray> for CommandHGetAll {
 
         match args.next() {
             Some(RespFrame::BulkString(field)) => Ok(CommandHGetAll {
-                field: String::from_utf8(field.0)?,
+                key: String::from_utf8(field.0)?,
+                sort: false,
             }),
             _ => Err(CommandError::InvalidCommandArguments(
                 "Invalid key or field".to_string(),
@@ -81,16 +82,35 @@ impl TryFrom<RespArray> for CommandHGetAll {
 }
 
 impl CommandExecutor for CommandHGetAll {
-    fn execute(self, _backend: &crate::backend::Backend) -> RespFrame {
-        // backend.hgetall(&self.field).into()
-        todo!()
+    fn execute(self, backend: &crate::backend::Backend) -> RespFrame {
+        let hmap = backend.hmap.get(&self.key);
+
+        match hmap {
+            Some(hmap) => {
+                let mut data = Vec::with_capacity(hmap.len());
+                for v in hmap.iter() {
+                    let key = v.key().to_owned();
+                    data.push((key, v.value().to_owned()));
+                }
+
+                if self.sort {
+                    data.sort_by(|a, b| a.0.cmp(&b.0));
+                }
+                let ret = data
+                    .into_iter()
+                    .flat_map(|(k, v)| vec![RespBulkString::from(k).into(), v])
+                    .collect::<Vec<RespFrame>>();
+                RespArray::new(ret).into()
+            }
+            None => RespFrame::Null(RespNull),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        cmd::{CommandHGet, CommandHGetAll, CommandHSet},
+        cmd::{CommandExecutor, CommandHGet, CommandHGetAll, CommandHSet},
         RespArray, RespBulkString, RespFrame,
     };
     use anyhow::Result;
@@ -135,7 +155,30 @@ mod tests {
             RespFrame::BulkString(RespBulkString::new(b"map".to_vec())),
         ]);
         let hgetall_command: CommandHGetAll = resp_array.try_into()?;
-        assert_eq!(hgetall_command.field, "map");
+        assert_eq!(hgetall_command.key, "map");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_hgetall_execute() -> Result<()> {
+        let backend = crate::backend::Backend::new();
+        backend.hset("map", "hello", RespBulkString::new("world").into());
+
+        let resp_array = RespArray::new(vec![
+            RespFrame::BulkString(RespBulkString::new(b"hgetall".to_vec())),
+            RespFrame::BulkString(RespBulkString::new(b"map".to_vec())),
+        ]);
+        let hgetall_command: CommandHGetAll = resp_array.try_into()?;
+        let resp_frame = hgetall_command.execute(&backend);
+        assert_eq!(
+            resp_frame,
+            RespArray::new(vec![
+                RespFrame::BulkString(RespBulkString::new(b"hello".to_vec())),
+                RespFrame::BulkString(RespBulkString::new(b"world".to_vec())),
+            ])
+            .into()
+        );
 
         Ok(())
     }

@@ -15,8 +15,8 @@ impl Backend {
 
 #[derive(Debug)]
 pub struct BackendInner {
-    map: DashMap<String, RespFrame>,
-    hmap: DashMap<String, DashMap<String, RespFrame>>,
+    pub map: DashMap<String, RespFrame>,
+    pub hmap: DashMap<String, DashMap<String, RespFrame>>,
 }
 
 impl BackendInner {
@@ -56,7 +56,7 @@ impl Backend {
         self.map.insert(key.to_string(), value);
     }
 
-    pub fn hsget(&self, key: &str, field: &str) -> Option<RespFrame> {
+    pub fn hget(&self, key: &str, field: &str) -> Option<RespFrame> {
         self.hmap
             .get(key)
             .and_then(|v| v.get(field).map(|v| v.value().clone()))

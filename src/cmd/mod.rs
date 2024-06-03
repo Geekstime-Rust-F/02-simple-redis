@@ -97,7 +97,8 @@ pub struct CommandHSet {
 
 #[derive(Debug, PartialEq)]
 pub struct CommandHGetAll {
-    field: String,
+    key: String,
+    sort: bool,
 }
 
 #[derive(Debug, PartialEq)]
