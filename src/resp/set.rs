@@ -24,11 +24,12 @@ impl RespDecode for RespSet {
     const FIRST_BYTE: [u8; 1] = [b'~'];
 
     fn decode(buf: &mut BytesMut) -> Result<Self, RespDecodeError> {
+        let mut frames = Vec::new();
         let (length_end_pos, length) =
             parse_length(buf, &String::from_utf8_lossy(&Self::FIRST_BYTE))?;
+
         buf.advance(length_end_pos + CRLF_LEN);
 
-        let mut frames = Vec::new();
         for _ in 0..length {
             let value = RespFrame::decode(buf)?;
             frames.push(value);

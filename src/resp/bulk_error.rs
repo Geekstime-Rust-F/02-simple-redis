@@ -39,7 +39,11 @@ impl RespDecode for RespBulkError {
     fn decode(buf: &mut BytesMut) -> Result<Self, RespDecodeError> {
         let (length_end_pos, length) =
             parse_length(buf, &String::from_utf8_lossy(&Self::FIRST_BYTE))?;
-
+        if length == -1 {
+            buf.advance(5);
+            return Ok(Self::new(Vec::new()));
+        }
+        let length: usize = length as usize;
         buf.advance(length_end_pos + CRLF_LEN);
         let error = buf.split_to(length + CRLF_LEN);
         if &error[length..] == CRLF.as_bytes() {

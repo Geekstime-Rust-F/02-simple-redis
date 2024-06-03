@@ -5,16 +5,9 @@ use tracing::info;
 use crate::RespDecodeError;
 
 use super::{
-    array::{RespArray, RespNullArray},
-    bulk_error::RespBulkError,
-    bulk_string::{RespBulkString, RespNullBulkString},
-    frame::RespFrame,
-    integer::RespInteger,
-    map::RespMap,
-    null::RespNull,
-    set::RespSet,
-    simple_error::RespSimpleError,
-    simple_string::RespSimpleString,
+    array::RespArray, bulk_error::RespBulkError, bulk_string::RespBulkString, frame::RespFrame,
+    integer::RespInteger, map::RespMap, null::RespNull, set::RespSet,
+    simple_error::RespSimpleError, simple_string::RespSimpleString,
 };
 
 pub const CRLF_LEN: usize = 2;
@@ -41,25 +34,8 @@ impl RespDecode for RespFrame {
             Some(b'-') => Ok(RespSimpleError::decode(buf)?.into()),
             Some(b'!') => Ok(RespBulkError::decode(buf)?.into()),
             Some(b':') => Ok(RespInteger::decode(buf)?.into()),
-            Some(b'$') => {
-                // try null bulk string first
-                match RespNullBulkString::decode(buf) {
-                    Ok(frame) => Ok(frame.into()),
-                    Err(RespDecodeError::NotComplete) => Err(RespDecodeError::NotComplete),
-                    Err(_) => {
-                        let frame = RespBulkString::decode(buf)?;
-                        Ok(frame.into())
-                    }
-                }
-            }
-            Some(b'*') => match RespNullArray::decode(buf) {
-                Ok(frame) => Ok(frame.into()),
-                Err(RespDecodeError::NotComplete) => Err(RespDecodeError::NotComplete),
-                Err(_) => {
-                    let frame = RespArray::decode(buf)?;
-                    Ok(frame.into())
-                }
-            },
+            Some(b'$') => Ok(RespBulkString::decode(buf)?.into()),
+            Some(b'*') => Ok(RespArray::decode(buf)?.into()),
             Some(b'%') => Ok(RespMap::decode(buf)?.into()),
             Some(b'~') => Ok(RespSet::decode(buf)?.into()),
             Some(b'_') => Ok(RespNull::decode(buf)?.into()),
@@ -102,7 +78,7 @@ pub fn extract_simple_frame_data(
     }
 }
 
-pub fn parse_length(buf: &mut BytesMut, prefix: &str) -> Result<(usize, usize), RespDecodeError> {
+pub fn parse_length(buf: &mut BytesMut, prefix: &str) -> Result<(usize, isize), RespDecodeError> {
     let length_end_pos = extract_simple_frame_data(buf, [prefix.as_bytes()[0]])?;
     let length = String::from_utf8_lossy(&buf[prefix.len()..length_end_pos]);
     Ok((length_end_pos, length.parse()?))

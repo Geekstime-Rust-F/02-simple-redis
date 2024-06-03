@@ -31,25 +31,19 @@ impl From<String> for RespBulkString {
         RespBulkString(value.into_bytes())
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
-pub struct RespNullBulkString;
 
 // - bulk string: "$<length>\r\n<data>\r\n"
 impl RespEncode for RespBulkString {
     fn encode(self) -> Result<Vec<u8>> {
+        if self.0.is_empty() {
+            return Ok(b"$-1\r\n".to_vec());
+        }
         Ok(format!(
             "${}\r\n{}\r\n",
             self.0.len(),
             String::from_utf8(self.0).unwrap()
         )
         .into())
-    }
-}
-
-// - null bulk string: "$-1\r\n"
-impl RespEncode for RespNullBulkString {
-    fn encode(self) -> Result<Vec<u8>> {
-        Ok(b"$-1\r\n".to_vec())
     }
 }
 
@@ -62,6 +56,12 @@ impl RespDecode for RespBulkString {
         let (length_end_pos, length) =
             parse_length(buf, &String::from_utf8_lossy(&Self::FIRST_BYTE))?;
 
+        if length == -1 {
+            buf.advance(5);
+            return Ok(Self::new(Vec::new()));
+        }
+        let length: usize = length as usize;
+
         buf.advance(length_end_pos + CRLF_LEN);
         let bulk_string = buf.split_to(length + CRLF_LEN);
         if &bulk_string[length..] == CRLF.as_bytes() {
@@ -71,20 +71,6 @@ impl RespDecode for RespBulkString {
                 "RespBulkString didn't end with {} or length not match",
                 CRLF
             )))
-        }
-    }
-}
-impl RespDecode for RespNullBulkString {
-    const FIRST_BYTE: [u8; 1] = [b'$'];
-
-    fn decode(buf: &mut BytesMut) -> Result<Self, RespDecodeError> {
-        if buf == "$-1\r\n" {
-            buf.advance(5);
-            Ok(Self)
-        } else {
-            Err(RespDecodeError::InvalidFrame(
-                "Invalid RespNullBulkString".to_string(),
-            ))
         }
     }
 }
@@ -108,7 +94,7 @@ mod tests {
 
     #[test]
     fn test_null_bulk_string_encode() -> Result<()> {
-        let resp_null_bulk_string: RespFrame = RespNullBulkString.into();
+        let resp_null_bulk_string: RespFrame = RespBulkString::new("").into();
         let result = resp_null_bulk_string.encode()?;
         assert_eq!(result, b"$-1\r\n");
         Ok(())
@@ -141,7 +127,7 @@ mod tests {
     fn test_null_bulk_string_decode() {
         let mut buf = BytesMut::new();
         buf.extend_from_slice(b"$-1\r\n");
-        let frame = RespNullBulkString::decode(&mut buf).unwrap();
-        assert_eq!(frame, RespNullBulkString);
+        let frame = RespBulkString::decode(&mut buf).unwrap();
+        assert_eq!(frame, RespBulkString::new(Vec::new()));
     }
 }

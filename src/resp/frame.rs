@@ -1,8 +1,8 @@
 use enum_dispatch::enum_dispatch;
 
 use crate::{
-    RespArray, RespBulkError, RespBulkString, RespInteger, RespMap, RespNull, RespNullArray,
-    RespNullBulkString, RespSimpleError, RespSimpleString,
+    RespArray, RespBulkError, RespBulkString, RespInteger, RespMap, RespNull, RespSimpleError,
+    RespSimpleString,
 };
 
 use super::set::RespSet;
@@ -15,9 +15,7 @@ pub enum RespFrame {
     BulkError(RespBulkError),
     Integer(RespInteger),
     BulkString(RespBulkString),
-    NullBulkString(RespNullBulkString),
     Array(RespArray),
-    NullArray(RespNullArray),
     Null(RespNull),
     Boolean(bool),
     Double(f64),

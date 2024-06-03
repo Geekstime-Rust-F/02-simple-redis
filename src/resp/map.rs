@@ -36,11 +36,11 @@ impl RespDecode for RespMap {
     const FIRST_BYTE: [u8; 1] = [b'%'];
 
     fn decode(buf: &mut BytesMut) -> Result<Self, RespDecodeError> {
+        let mut frames = Self::new();
         let (length_end_pos, length) =
             parse_length(buf, &String::from_utf8_lossy(&Self::FIRST_BYTE))?;
         buf.advance(length_end_pos + CRLF_LEN);
 
-        let mut frames = Self::new();
         for _ in 0..length {
             let key = RespSimpleString::decode(buf)?;
             let value = RespFrame::decode(buf)?;

@@ -13,9 +13,9 @@ mod simple_error;
 mod simple_string;
 
 pub use self::{
-    array::{RespArray, RespNullArray},
+    array::RespArray,
     bulk_error::RespBulkError,
-    bulk_string::{RespBulkString, RespNullBulkString},
+    bulk_string::RespBulkString,
     decode::{extract_simple_frame_data, parse_length, RespDecode, CRLF, CRLF_LEN},
     frame::RespFrame,
     integer::RespInteger,

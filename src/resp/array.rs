@@ -21,14 +21,14 @@ impl Deref for RespArray {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
-pub struct RespNullArray;
-
 // - array: "*<number-of-elements>\r\n<element-1>...<element-n>"
 //   - "*2\r\n$3\r\nget\r\n$5\r\nhello\r\n"
 const ARRAY_CAP: usize = 4096;
 impl RespEncode for RespArray {
     fn encode(self) -> Result<Vec<u8>> {
+        if self.0.is_empty() {
+            return Ok(b"*-1\r\n".to_vec());
+        }
         let mut buf = Vec::with_capacity(ARRAY_CAP);
         buf.extend_from_slice(&format!("*{}\r\n", self.0.len()).into_bytes());
 
@@ -37,13 +37,6 @@ impl RespEncode for RespArray {
         }
 
         Ok(buf)
-    }
-}
-
-// - null array: "*-1\r\n"
-impl RespEncode for RespNullArray {
-    fn encode(self) -> Result<Vec<u8>> {
-        Ok(b"*-1\r\n".to_vec())
     }
 }
 
@@ -56,6 +49,11 @@ impl RespDecode for RespArray {
     fn decode(buf: &mut BytesMut) -> Result<Self, RespDecodeError> {
         let (length_end_pos, length) =
             parse_length(buf, &String::from_utf8_lossy(&Self::FIRST_BYTE))?;
+        if length == -1 {
+            buf.advance(5);
+            return Ok(Self::new(Vec::new()));
+        }
+        let length: usize = length as usize;
         buf.advance(length_end_pos + CRLF_LEN);
 
         let mut frames = Vec::new();
@@ -67,38 +65,20 @@ impl RespDecode for RespArray {
     }
 }
 
-impl RespDecode for RespNullArray {
-    const FIRST_BYTE: [u8; 1] = [b'*'];
-
-    fn decode(buf: &mut BytesMut) -> Result<Self, RespDecodeError> {
-        if buf == "*-1\r\n" {
-            buf.advance(5);
-            Ok(Self)
-        } else {
-            Err(RespDecodeError::InvalidFrame(
-                "RespNullArray requires to start with $".to_string(),
-            ))
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
 
     use anyhow::Ok;
     use bytes::BytesMut;
 
-    use crate::resp::{
-        bulk_string::{RespBulkString, RespNullBulkString},
-        simple_string::RespSimpleString,
-    };
+    use crate::resp::{bulk_string::RespBulkString, simple_string::RespSimpleString};
 
     use super::*;
 
     #[test]
     fn test_array_encode() -> Result<()> {
         let frame_vec = vec![
-            RespNullBulkString.into(),
+            RespBulkString::new("").into(),
             RespBulkString::new("hello").into(),
         ];
         let resp_array = RespArray::new(frame_vec);
@@ -109,7 +89,7 @@ mod tests {
 
     #[test]
     fn test_null_array_encode() -> Result<()> {
-        let resp_null_array: RespFrame = RespNullArray.into();
+        let resp_null_array: RespFrame = RespArray::new(Vec::new()).into();
         let result = resp_null_array.encode()?;
         assert_eq!(result, b"*-1\r\n");
         Ok(())
@@ -144,7 +124,7 @@ mod tests {
     fn test_null_array_decode() {
         let mut buf = BytesMut::new();
         buf.extend_from_slice(b"*-1\r\n");
-        let frame = RespNullArray::decode(&mut buf).unwrap();
-        assert_eq!(frame, RespNullArray);
+        let frame = RespArray::decode(&mut buf).unwrap();
+        assert_eq!(frame, RespArray::new(Vec::new()));
     }
 }
