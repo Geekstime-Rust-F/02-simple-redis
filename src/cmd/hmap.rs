@@ -1,4 +1,6 @@
-use crate::{RespArray, RespBulkString, RespFrame, RespNull};
+use tracing::info;
+
+use crate::{backend::Backend, RespArray, RespBulkString, RespFrame, RespNull};
 
 use super::{extract_args, validate_command, CommandError, CommandExecutor, RESP_OK};
 
@@ -19,6 +21,12 @@ pub struct CommandHSet {
 pub struct CommandHGetAll {
     key: String,
     sort: bool,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CommandHMGet {
+    key: String,
+    fields: Vec<String>,
 }
 
 impl TryFrom<RespArray> for CommandHGet {
@@ -72,6 +80,45 @@ impl TryFrom<RespArray> for CommandHSet {
         }
     }
 }
+
+impl TryFrom<RespArray> for CommandHMGet {
+    type Error = CommandError;
+
+    fn try_from(value: RespArray) -> Result<Self, Self::Error> {
+        let n_args = value.len() - 1;
+        validate_command(&value, &["hmget"], n_args)?;
+        let mut args = extract_args(value, 1)?.into_iter();
+
+        match args.next() {
+            Some(RespFrame::BulkString(key)) => {
+                let mut string_fields: Vec<String> = Vec::new();
+                args.for_each(|field| match field {
+                    RespFrame::BulkString(field) => {
+                        string_fields.push(String::from_utf8(field.0).unwrap())
+                    }
+                    _ => {
+                        info!("unexpected hmget all field: {:?}", field);
+                    }
+                });
+                if string_fields.len() != n_args - 1 {
+                    return Err(CommandError::InvalidCommandArguments(
+                        "Invalid hmget field".to_string(),
+                    ));
+                }
+
+                Ok(CommandHMGet {
+                    key: String::from_utf8(key.0)?,
+                    fields: string_fields,
+                })
+            }
+            err => Err(CommandError::InvalidCommandArguments(format!(
+                "Invalid key or field: {:?}",
+                err
+            ))),
+        }
+    }
+}
+
 impl CommandExecutor for CommandHSet {
     fn execute(self, backend: &crate::backend::Backend) -> RespFrame {
         backend.hset(&self.key, &self.field, self.value);
@@ -98,7 +145,7 @@ impl TryFrom<RespArray> for CommandHGetAll {
 }
 
 impl CommandExecutor for CommandHGetAll {
-    fn execute(self, backend: &crate::backend::Backend) -> RespFrame {
+    fn execute(self, backend: &Backend) -> RespFrame {
         let hmap = backend.hmap.get(&self.key);
 
         match hmap {
@@ -123,16 +170,37 @@ impl CommandExecutor for CommandHGetAll {
     }
 }
 
+impl CommandExecutor for CommandHMGet {
+    fn execute(self, backend: &Backend) -> RespFrame {
+        let hmap = backend.hmap.get(&self.key);
+
+        match hmap {
+            Some(hmap) => {
+                let mut data = Vec::with_capacity(self.fields.len());
+                for v in self.fields {
+                    if let Some(v) = hmap.get(&v) {
+                        data.push(v.value().to_owned());
+                    } else {
+                        data.push(RespFrame::Null(RespNull));
+                    }
+                }
+                RespArray::new(data).into()
+            }
+            None => RespFrame::Null(RespNull),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
         cmd::{
-            hmap::{CommandHGet, CommandHGetAll, CommandHSet},
+            hmap::{CommandHGet, CommandHGetAll, CommandHMGet, CommandHSet},
             CommandExecutor,
         },
-        RespArray, RespBulkString, RespFrame,
+        RespArray, RespBulkString, RespFrame, RespNull,
     };
-    use anyhow::Result;
+    use anyhow::{Ok, Result};
 
     #[test]
     fn test_hget_command_from_resp_array() -> Result<()> {
@@ -178,6 +246,26 @@ mod tests {
 
         Ok(())
     }
+    #[test]
+    fn test_hmget_command_from_resp_array() -> Result<()> {
+        let backend = crate::backend::Backend::new();
+        backend.hset("map", "hello", RespBulkString::new("world").into());
+        backend.hset("map", "hello2", RespBulkString::new("world2").into());
+
+        let resp_array = RespArray::new(vec![
+            RespFrame::BulkString(RespBulkString::new(b"hmget".to_vec())),
+            RespFrame::BulkString(RespBulkString::new(b"map".to_vec())),
+            RespFrame::BulkString(RespBulkString::new(b"hello".to_vec())),
+            RespFrame::BulkString(RespBulkString::new(b"hello2".to_vec())),
+        ]);
+
+        let hmget_command: CommandHMGet = resp_array.try_into()?;
+
+        assert_eq!(hmget_command.key, "map");
+        assert_eq!(hmget_command.fields, vec!["hello", "hello2"]);
+
+        Ok(())
+    }
 
     #[test]
     fn test_hgetall_execute() -> Result<()> {
@@ -195,6 +283,35 @@ mod tests {
             RespArray::new(vec![
                 RespFrame::BulkString(RespBulkString::new(b"hello".to_vec())),
                 RespFrame::BulkString(RespBulkString::new(b"world".to_vec())),
+            ])
+            .into()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_hmget_execute() -> Result<()> {
+        let backend = crate::backend::Backend::new();
+        backend.hset("map", "hello", RespBulkString::new("world").into());
+        backend.hset("map", "hello2", RespBulkString::new("world2").into());
+
+        let resp_array = RespArray::new(vec![
+            RespFrame::BulkString(RespBulkString::new(b"hmget".to_vec())),
+            RespFrame::BulkString(RespBulkString::new(b"map".to_vec())),
+            RespFrame::BulkString(RespBulkString::new(b"hello".to_vec())),
+            RespFrame::BulkString(RespBulkString::new(b"hello2".to_vec())),
+            RespFrame::BulkString(RespBulkString::new(b"hello3".to_vec())),
+        ]);
+
+        let hmget_command: CommandHMGet = resp_array.try_into()?;
+        let resp_frame = hmget_command.execute(&backend);
+        assert_eq!(
+            resp_frame,
+            RespArray::new(vec![
+                RespFrame::BulkString(RespBulkString::new(b"world".to_vec())),
+                RespFrame::BulkString(RespBulkString::new(b"world2".to_vec())),
+                RespFrame::Null(RespNull),
             ])
             .into()
         );

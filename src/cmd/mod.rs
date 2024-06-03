@@ -5,7 +5,7 @@ mod unknow;
 
 use echo::CommandEcho;
 use enum_dispatch::enum_dispatch;
-use hmap::{CommandHGet, CommandHGetAll, CommandHSet};
+use hmap::{CommandHGet, CommandHGetAll, CommandHMGet, CommandHSet};
 use lazy_static::lazy_static;
 use map::{CommandGet, CommandSet};
 use std::string::FromUtf8Error;
@@ -51,6 +51,7 @@ pub enum Command {
     HGet(CommandHGet),
     HSet(CommandHSet),
     HGetAll(CommandHGetAll),
+    HMGet(CommandHMGet),
 
     Echo(CommandEcho),
 
@@ -68,6 +69,7 @@ impl TryFrom<RespArray> for Command {
                 b"hget" => Ok(CommandHGet::try_from(value)?.into()),
                 b"hset" => Ok(CommandHSet::try_from(value)?.into()),
                 b"hgetall" => Ok(CommandHGetAll::try_from(value)?.into()),
+                b"hmget" => Ok(CommandHMGet::try_from(value)?.into()),
                 b"echo" => Ok(CommandEcho::try_from(value)?.into()),
                 _ => Ok(CommandUnknown.into()),
             },
@@ -83,8 +85,8 @@ pub fn validate_command(
 ) -> Result<(), CommandError> {
     if value.len() != command_names.len() + n_args {
         return Err(CommandError::InvalidCommandArguments(format!(
-            "GET command must have exactly {} argument",
-            n_args
+            "{:?} command must have exactly {} argument",
+            command_names, n_args
         )));
     }
     for (i, command_name) in command_names.iter().enumerate() {
@@ -92,7 +94,7 @@ pub fn validate_command(
             RespFrame::BulkString(ref command) => {
                 if &*command.to_ascii_lowercase() != command_name.as_bytes() {
                     return Err(CommandError::InvalidCommand(format!(
-                        "Invalid command: {:?}",
+                        "Invalid command name: {:?}",
                         value[i]
                     )));
                 }
